@@ -1,0 +1,22 @@
+mlx-restormer-swift
+===================
+
+Port code: MIT (this repository).
+
+Upstream model and weights
+--------------------------
+Restormer — https://github.com/swz30/Restormer
+Zamir et al., "Restormer: Efficient Transformer for High-Resolution Image
+Restoration", CVPR 2022.
+
+License: MIT, Copyright (c) 2022 Syed Waqas Zamir and contributors.
+See LICENSE-upstream.
+
+NOTE: the same author's MIRNet / MIRNetv2 / MPRNet / CycleISP are covered by an
+Academic Public License. Restormer is NOT — it is unqualified MIT. The two are
+easy to conflate.
+
+Checkpoints are published first-party as GitHub release v1.0 assets under that
+same MIT license. The upstream repository vendors BasicSR (Apache-2.0) as its
+training framework; this port depends on none of it — only the architecture file
+was read, and no upstream code is vendored here.

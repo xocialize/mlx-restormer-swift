@@ -1,0 +1,29 @@
+Restormer PyTorch goldens — fp32, CPU, PyTorch NCHW, C-contiguous.
+checkpoint: weights/motion_deblurring.pth  (state dict under raw['params'])
+constructor: Restormer(LayerNorm_type='WithBias')  dim=48 num_blocks=[4,6,6,8]
+             num_refinement_blocks=4 heads=[1,2,4,8] ffn=2.66 bias=False
+input contract: RGB [0,1]; pad to a multiple of 8 (three /2 stages).
+
+layernorm_in.npy                         (1, 48, 32, 32)          min=-4.066427 max=+4.630851 mean=+0.002906
+layernorm_withbias_out.npy               (1, 48, 32, 32)          min=-3.363773 max=+3.357118 mean=-0.092282
+layernorm_biasfree_w.npy                 (48,)                    min=+0.535862 max=+0.921339 mean=+0.765316
+layernorm_biasfree_out.npy               (1, 48, 32, 32)          min=-3.122413 max=+3.596413 mean=+0.002680
+down_in.npy                              (1, 48, 32, 32)          min=-4.216666 max=+3.924793 mean=-0.006506
+down_out.npy                             (1, 96, 16, 16)          min=-4.902156 max=+4.826108 mean=+0.011537
+up_in.npy                                (1, 384, 8, 8)           min=-4.806207 max=+4.102986 mean=-0.008134
+up_out.npy                               (1, 192, 16, 16)         min=-11.948864 max=+11.861486 mean=-0.013763
+mdta_in.npy                              (1, 48, 16, 16)          min=-4.230583 max=+3.812227 mean=+0.006394
+mdta_out.npy                             (1, 48, 16, 16)          min=-0.502895 max=+0.687989 mean=+0.000282
+mdta_temperature.npy                     (1, 1, 1)                min=+0.752235 max=+0.752235 mean=+0.752235
+gdfn_in.npy                              (1, 48, 16, 16)          min=-4.326549 max=+4.391404 mean=+0.005699
+gdfn_out.npy                             (1, 48, 16, 16)          min=-2.196854 max=+1.612617 mean=-0.002223
+tblock_in.npy                            (1, 48, 16, 16)          min=-3.908053 max=+3.999867 mean=-0.011903
+tblock_out.npy                           (1, 48, 16, 16)          min=-3.846497 max=+4.054007 mean=-0.018774
+full_64_in.npy                           (1, 3, 64, 64)           min=+0.000006 max=+0.999934 mean=+0.501313
+full_64_out.npy                          (1, 3, 64, 64)           min=-0.019116 max=+1.539264 mean=+0.633246
+full_128_in.npy                          (1, 3, 128, 128)         min=+0.000013 max=+0.999971 mean=+0.497329
+full_128_out.npy                         (1, 3, 128, 128)         min=-0.108615 max=+1.611931 mean=+0.627180
+full_256_in.npy                          (1, 3, 256, 256)         min=+0.000001 max=+0.999987 mean=+0.499832
+full_256_out.npy                         (1, 3, 256, 256)         min=-0.102310 max=+1.574768 mean=+0.632943
+full_img256_in.npy                       (1, 3, 256, 256)         min=+0.079617 max=+0.918610 mean=+0.501672
+full_img256_out.npy                      (1, 3, 256, 256)         min=+0.069547 max=+0.910330 mean=+0.504718
