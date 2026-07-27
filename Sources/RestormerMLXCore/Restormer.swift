@@ -152,6 +152,91 @@ public final class Restormer: Module, @unchecked Sendable {
         return self(padded)[0..., 0 ..< h, 0 ..< w, 0...]
     }
 
+    /// Tiled restoration — **the production path.** Full-frame is not viable above ~512².
+    ///
+    /// Measured (M5 Max, `--bench`): 512² costs 3.26 GB MLX / 12.96 GB phys; 1080p costs
+    /// **15.50 GB MLX / 48.02 GB phys**. A 104 MB model must not need 48 GB to deblur one frame.
+    /// (The sibling FFTformer port is worse still at ~40 GB MLX, for the same reason: level 1 runs
+    /// at full resolution with a wide channel expansion.)
+    ///
+    /// 🔑 **Tile geometry is aligned to 8.** Three `pixelUnshuffle(2)` stages mean the 2×2 grouping
+    /// grid is measured from the tile origin at strides 2, 4 and 8 in full-resolution pixels, so a
+    /// tile origin that is not ≡ 0 (mod 8) shifts that grid out of phase with the full-frame
+    /// decomposition. Same class of bug as FFTformer's 32-alignment, one third the stride. Both
+    /// tile and overlap are rounded down to a multiple of 8.
+    ///
+    /// Feathered blend rather than crop-valid: the receptive field of a 4-level UNet with 4+6+6+8
+    /// transformer blocks far exceeds any practical overlap, so blending removes seams without
+    /// pretending to reproduce a full-frame result that is itself unattainable at these sizes.
+    ///
+    /// - Parameter onTile: called as `(completed, total)` before each tile — the seam for
+    ///   cooperative cancellation and progress. Throwing aborts, and the error propagates unchanged.
+    public func restoreTiled(_ image: MLXArray, tile: Int = 384, overlap: Int = 32,
+                             onTile: ((Int, Int) throws -> Void)? = nil) rethrows -> MLXArray {
+        let tile = max(64, (tile / 8) * 8)
+        let overlap = (overlap / 8) * 8
+        precondition(tile > 2 * overlap, "tile (\(tile)) must exceed 2·overlap (\(2 * overlap))")
+
+        let (b, h, w, c) = (image.dim(0), image.dim(1), image.dim(2), image.dim(3))
+        if h <= tile && w <= tile { return restore(image) }
+
+        let step = tile - 2 * overlap
+        var acc = MLXArray.zeros([b, h, w, c], dtype: .float32)
+        var wsum = MLXArray.zeros([1, h, w, 1], dtype: .float32)
+
+        let total = ((h + step - 1) / step) * ((w + step - 1) / step)
+        var done = 0
+
+        for coreY in stride(from: 0, to: h, by: step) {
+            let inY0 = max(0, coreY - overlap)
+            let inY1 = min(h, coreY + step + overlap)
+            for coreX in stride(from: 0, to: w, by: step) {
+                try onTile?(done, total)
+                done += 1
+
+                let inX0 = max(0, coreX - overlap)
+                let inX1 = min(w, coreX + step + overlap)
+
+                let restored = restore(image[0..., inY0 ..< inY1, inX0 ..< inX1, 0...])
+                let weight = Self.featherWeights(height: inY1 - inY0, width: inX1 - inX0,
+                                                 ramp: overlap,
+                                                 topEdge: inY0 == 0, bottomEdge: inY1 == h,
+                                                 leftEdge: inX0 == 0, rightEdge: inX1 == w)
+                acc[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] =
+                    acc[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] + restored.asType(.float32) * weight
+                wsum[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] =
+                    wsum[0..., inY0 ..< inY1, inX0 ..< inX1, 0...] + weight
+
+                // Realize and release per tile — MLX otherwise accumulates unbounded residency
+                // across a long sequential graph, which is exactly what a tile loop is.
+                eval(acc, wsum)
+                MLX.Memory.clearCache()
+            }
+        }
+        return clip(acc / maximum(wsum, MLXArray(1e-8)), min: 0, max: 1).asType(image.dtype)
+    }
+
+    /// Separable linear ramp; image-boundary edges are left unramped, since nothing overlaps them
+    /// and a falloff there would divide by a small weight and amplify noise at the frame border.
+    private static func featherWeights(height: Int, width: Int, ramp: Int,
+                                       topEdge: Bool, bottomEdge: Bool,
+                                       leftEdge: Bool, rightEdge: Bool) -> MLXArray {
+        func profile(_ n: Int, _ startFlat: Bool, _ endFlat: Bool) -> [Float] {
+            var v = [Float](repeating: 1, count: n)
+            guard ramp > 0 else { return v }
+            let r = min(ramp, n / 2)
+            for i in 0 ..< r {
+                let t = (Float(i) + 0.5) / Float(r)
+                if !startFlat { v[i] = t }
+                if !endFlat { v[n - 1 - i] = min(v[n - 1 - i], t) }
+            }
+            return v
+        }
+        let y = MLXArray(profile(height, topEdge, bottomEdge), [1, height, 1, 1])
+        let x = MLXArray(profile(width, leftEdge, rightEdge), [1, 1, width, 1])
+        return y * x
+    }
+
     /// Loads converted safetensors weights under the strict verifier.
     public func loadWeights(from url: URL) throws {
         let arrays = try MLX.loadArrays(url: url)

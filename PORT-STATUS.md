@@ -97,3 +97,66 @@ cd .. && swift run restormer-gate --all oracle/goldens oracle/converted/motion_d
 ```
 
 `oracle/upstream`, `oracle/.venv`, `oracle/weights`, `oracle/converted` are generated — not committed.
+
+---
+
+## Stage 2 — package ✅ (2026-07-27)
+
+`MLXRestormer.RestormerRestorePackage` — the **third** package on `imageRestore`, alongside NAFNet
+and FFTformer. Same request shape, **no contract change**, variant-selected.
+
+**Conformance 11/11**, including three tests that pin this port's specific hazards rather than
+restating the manifest: the norm-kind ↔ variant mapping, the 494-vs-406 tensor-count difference
+(asserted without loading any weights), and the 8-aligned tile defaults.
+
+### 🔑 The variant changes the KEY SET, not just the weights
+
+The denoising checkpoint is `BiasFree` and has **no bias vectors at all**:
+
+| | tensors | params |
+|---|---|---|
+| deblur (`WithBias`) | 494 | 26,126,644 |
+| denoise (`BiasFree`) | **406** | **26,111,668** |
+
+An exact 88-tensor difference — the LayerNorm biases. Verified in **both** directions: the right
+config loads strict-clean, the wrong one fails with exactly 88 missing keys.
+
+### Tiling — mandatory, and measured
+
+| | MLX peak | phys |
+|---|---|---|
+| 1080p **full-frame** | 15.50 GB | 48.02 GB |
+| 512² tiled | 2.58 GB | — |
+| 1024² tiled | 2.59 GB | — |
+| 1080p tiled | **2.62 GB** | ~4.3 GB |
+
+The MLX peak is **flat in resolution** because the peak is one-tile-sized — a bigger image runs more
+tiles, not bigger ones.
+
+**Tile geometry is 8-aligned**: three `pixelUnshuffle(2)` stages make the 2×2 grouping grid
+phase-sensitive to the tile origin at strides 2, 4 and 8 full-res pixels. Same class as FFTformer's
+32-alignment, one third the stride.
+
+**Overlap was chosen on seam visibility, not PSNR** — and the two disagree, which is the interesting
+part:
+
+| overlap | PSNR vs full-frame | seam / interior gradient |
+|---|---|---|
+| 0 | **38.70 dB** (best) | **1.31×** — faint but visible |
+| 8 | 36.18 dB | 1.13× clean |
+| 16 | 37.22 dB | 1.12× clean |
+| 32 (default) | 37.09 dB | 1.20× |
+| 48 | 37.12 dB | 1.09× clean |
+
+PSNR-against-full-frame *prefers* overlap 0, which produces a real seam. Full-frame is unattainable
+at production sizes anyway, so agreement with it is the wrong objective for a tiler; boundary
+continuity is the right one.
+
+## Published
+
+- [`mlx-community/Restormer-motion-deblurring-fp32`](https://huggingface.co/mlx-community/Restormer-motion-deblurring-fp32)
+- [`mlx-community/Restormer-defocus-deblurring-fp32`](https://huggingface.co/mlx-community/Restormer-defocus-deblurring-fp32)
+- [`mlx-community/Restormer-real-denoising-fp32`](https://huggingface.co/mlx-community/Restormer-real-denoising-fp32)
+- [collection](https://huggingface.co/collections/mlx-community/restormer-mlx-6a67b47a017c8be2f293d143)
+
+Round-trip verified: freshly downloaded artifacts re-passed S0 (both norm variants) and S3.
