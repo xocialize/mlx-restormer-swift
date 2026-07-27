@@ -47,20 +47,24 @@ public final class RestormerRestorePackage: ModelPackage {
             license: LicenseDeclaration(weightLicense: .mit, portCodeLicense: .mit),
             provenance: Provenance(sourceRepo: "swz30/Restormer", revision: "main", tier: 1),
             requirements: RequirementsManifest(
-                // Split footprint (engine 1.14), from `restormer-gate --bench` process
-                // phys_footprint on the TILED production path.
-                //   • post-load floor : 0.12 GB → resident declared 150 MB with headroom
-                //     (26.1 M params @ fp32 = 104.5 MB + runtime/Metal overhead)
-                //   • activation      : measured 1.3–4.2 GB across 512²…1080p → declared 4.5 GB
-                // Because tiling is internal the MLX peak is FLAT in resolution — 2.58 / 2.59 /
-                // 2.62 GB at 512² / 1024² / 1080p — so a 4K frame runs more tiles, not bigger ones.
-                // Untiled for comparison: 15.50 GB MLX / 48.02 GB phys at 1080p.
-                // ⚠️ FLAGGED: CLI numbers; replace with an in-app phys_footprint run before this
-                // package is marked validated.
+                // Split footprint (engine 1.14) — ✅ MEASURED through the REAL `MLXServeEngine` via
+                // `MLXEngineTestKit.ValidationHarness` (`swift run restormer-validate`), process
+                // `phys_footprint`, floor read post-load/pre-run:
+                //
+                //   [restormer-motionDeblur] SPLIT floor=0.14GB peak=4.90GB act=4.76GB retain=0.36GB
+                //                            engine=0.15GB reserve=4.50GB load=0.1s run=20.7s @1920x1080
+                //
+                // Declared with margin: resident 180 MB (floor 136.5 MB), activation 5.5 GB (measured
+                // 4.76 GB). The earlier 4.5 GB estimate from the gate's `--bench` was slightly UNDER
+                // the truth — the same direction that makes under-declaration dangerous, just by less
+                // than CIDNet's 2x miss.
+                //
+                // Tiling is internal, so the peak is one-tile-sized and flat in resolution. Untiled
+                // for comparison: 15.50 GB MLX / 48.02 GB phys at 1080p.
                 footprints: [
                     QuantFootprint(quant: .fp32,
-                                   residentBytes: 150_000_000,
-                                   peakActivationBytes: 4_500_000_000),
+                                   residentBytes: 180_000_000,
+                                   peakActivationBytes: 5_500_000_000),
                 ],
                 requiredBackends: [.metalGPU],
                 os: OSRequirement(minMacOS: SemanticVersion(major: 26, minor: 0, patch: 0)),
