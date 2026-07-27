@@ -4,6 +4,7 @@
 xcuserdata/
 oracle/upstream/
 oracle/.venv/
+oracle/hf*/          # any Hugging Face download cache (hf/, hf-cache/, hf-rt/, hf-roundtrip/)
 oracle/weights/
 oracle/converted/
 oracle/__pycache__/
