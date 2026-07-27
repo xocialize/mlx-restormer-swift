@@ -4,7 +4,10 @@
 xcuserdata/
 oracle/upstream/
 oracle/.venv/
-oracle/hf*/          # any Hugging Face download cache (hf/, hf-cache/, hf-rt/, hf-roundtrip/)
+# Any Hugging Face download cache (hf/, hf-cache/, hf-rt/, hf-roundtrip/).
+# NOTE: the comment MUST be on its own line — '#' only starts a comment at the START of a
+# line, so a trailing one made this pattern literal and it matched nothing.
+oracle/hf*/
 oracle/weights/
 oracle/converted/
 oracle/__pycache__/
