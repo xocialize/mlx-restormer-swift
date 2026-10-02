@@ -228,15 +228,15 @@ guard let mode = args.first else {
     print("usage: restormer-gate --s0 <weights> | --s1|--s2|--s3|--all <goldens> <weights>")
     exit(2)
 }
-if mode != "--bench" && mode != "--tile" { Device.setDefault(device: .cpu) }
+if mode != "--bench" && mode != "--tile" { Device.setDefault(device: Device(.cpu)) }
 switch mode {
 case "--tile":
     guard args.count >= 2 else { fail("--tile needs a weights path") }
-    Device.setDefault(device: .gpu)
+    Device.setDefault(device: Device(.gpu))
     gateTile(args[1])
 case "--bench":
     guard args.count >= 2 else { fail("--bench needs a weights path") }
-    Device.setDefault(device: .gpu)
+    Device.setDefault(device: Device(.gpu))
     gateBench(args[1])
 case "--s0":
     guard args.count >= 2 else { fail("--s0 needs a weights path") }
